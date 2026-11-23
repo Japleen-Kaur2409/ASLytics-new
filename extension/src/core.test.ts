@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { parseJson3, trackUrlFor } from "./captions";
-import { WordLookup } from "./gloss";
+import { GlossRepairer, WordLookup } from "./gloss";
 import { FRAME_SIZE, type Sequence } from "./landmarks";
 import { framePosition } from "./signer";
 import { bestJoin, stitch } from "./stitch";
@@ -47,6 +47,22 @@ describe("word lookup (placeholder gloss step)", () => {
     expect(lookup.toGloss("apples soccer walking").glosses).toEqual(["APPLE", "SOCCER2", "WALK"]);
     expect(lookup.toGloss("I don't walk").glosses).toEqual(["ME", "NOT", "WALK"]);
     expect(new WordLookup(["PLAN", "RUN"]).toGloss("planned running").glosses).toEqual(["PLAN", "RUN"]);
+  });
+});
+
+describe("gloss model output repair", () => {
+  const repairer = new GlossRepairer(["HELLO", "MY", "NAME", "APPLE", "APPLE2", "WANT1", "WANT2", "ME", "THIS/IT", "DONTLIKE", "BICYCLE"]);
+
+  it("keeps exact signs and fixes near misses", () => {
+    expect(repairer.repair("ME DONTLIKE APPLE1").glosses).toEqual(["ME", "DONTLIKE", "APPLE"]);
+    expect(repairer.repair("I want this").glosses).toEqual(["ME", "WANT1", "THIS/IT"]);
+  });
+
+  it("reports fingerspelled and unknown words as missing", () => {
+    const result = repairer.repair("HELLO MY NAME fs-SAM Bike");
+    expect(result.glosses).toEqual(["HELLO", "MY", "NAME"]);
+    expect(result.missing).toEqual(["sam", "bike"]);
+    expect(repairer.repair("").glosses).toEqual([]);
   });
 });
 

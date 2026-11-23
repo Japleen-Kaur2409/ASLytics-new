@@ -28,6 +28,17 @@ export function captionAt(captions: Caption[], t: number): number {
   return hi >= 0 && t < captions[hi].end ? hi : -1;
 }
 
+/** Index of the first caption that has not finished by time t. */
+export function firstCaptionFrom(captions: Caption[], t: number): number {
+  let lo = 0, hi = captions.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (captions[mid].end <= t) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo;
+}
+
 class Session {
   private root = document.createElement("div");
   private status = document.createElement("div");
@@ -38,6 +49,8 @@ class Session {
   private rest: Sequence | null = null;
   private raf = 0;
   private stopped = false;
+  private glossing = false;
+  private modelUnavailable = false;
 
   constructor(private videoId: string, private signerRef: Signer) {
     this.root.id = "aslytics-overlay";
@@ -82,6 +95,7 @@ class Session {
     let elapsed = 0, duration = 1;
     if (this.captions) {
       const i = captionAt(this.captions, video.currentTime);
+      this.glossAhead(firstCaptionFrom(this.captions, video.currentTime));
       if (i >= 0) {
         const caption = this.captions[i];
         signed = this.signerRef.sign(caption.text);
@@ -102,6 +116,10 @@ class Session {
     if (signed?.sequence) {
       this.rest = signed.sequence;
       this.glossLine.textContent = signed.glosses.join(" ");
+      if (this.captions) {
+        this.status.textContent =
+          signed.source === "model" ? "Gloss model · experimental, unreviewed" : "Word-by-word signs, not full ASL";
+      }
       this.renderer.draw(signed.sequence, framePosition(signed.sequence, elapsed, duration));
     } else {
       this.glossLine.textContent = "";
@@ -109,6 +127,28 @@ class Session {
       if (this.rest) this.renderer.draw(this.rest, this.rest.n - 1);
     }
   };
+
+  /** Ask the background worker to gloss the next few captions, a small batch at a time. */
+  private glossAhead(from: number): void {
+    if (this.glossing || this.modelUnavailable || !this.captions) return;
+    const batch: string[] = [];
+    for (let i = from; i < this.captions.length && i < from + 12 && batch.length < 4; i++) {
+      const text = this.captions[i].text;
+      if (!this.signerRef.hasModelGloss(text) && !batch.includes(text)) batch.push(text);
+    }
+    if (batch.length === 0) return;
+    this.glossing = true;
+    chrome.runtime.sendMessage({ type: "aslytics-gloss", texts: batch }, (reply?: { glosses?: string[]; error?: string }) => {
+      this.glossing = false;
+      if (chrome.runtime.lastError || !reply?.glosses) {
+        // Keep working with the word-by-word fallback rather than retrying every frame.
+        this.modelUnavailable = true;
+        console.warn("[ASLytics] gloss model unavailable:", chrome.runtime.lastError?.message ?? reply?.error);
+        return;
+      }
+      batch.forEach((text, k) => this.signerRef.setModelGloss(text, reply.glosses![k] ?? ""));
+    });
+  }
 
   stop(): void {
     this.stopped = true;

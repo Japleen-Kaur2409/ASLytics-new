@@ -22,7 +22,17 @@ Notes:
 - Output glosses are either exact dictionary entries or `fs-WORD` (fingerspelled). Pairs that use any other sign are dropped. The dictionary has no alphabet yet, so the extension cannot perform `fs-` tokens.
 - The pairs are machine-written and unreviewed. Have an ASL signer check a sample before trusting metrics computed against them.
 - The quantised export is about 150 MB across three files (95 MB if the browser loads only the encoder and one decoder).
-- Not done yet: running the exported model inside the extension.
+- ## Putting a model in the extension
+
+The browser library wants a merged decoder, which `export_onnx.py` does not produce:
+
+```bash
+optimum-cli export onnx --model model_7200 --task text2text-generation-with-past onnx_merged
+```
+
+Then quantise `encoder_model.onnx` and `decoder_model_merged.onnx` (same `ORTQuantizer` call as in `export_onnx.py`) into `extension/public/models/gloss/onnx/`, and copy `config.json`, `generation_config.json` and the tokenizer files next to it. About 77 MB in total.
+
+Quantisation costs some accuracy: the int8 browser model wrote TASTE for "apples" where the int8 model checked in Python wrote APPLE1. Not yet measured on the held-out set.
 
 ## Results so far
 
@@ -39,4 +49,14 @@ The open-model (Qwen2.5-7B) trial kept 21 of 40 sentences after repair and retry
 
 Note: models trained on Kaggle are saved by a newer `transformers` whose tokenizer config the pinned local version cannot read. Before exporting, replace the tokenizer files with `AutoTokenizer.from_pretrained("t5-small").save_pretrained(<model dir>)`; fine-tuning does not change the tokenizer.
 
-Not done yet: running the exported model inside the extension.
+## Putting a model in the extension
+
+The browser library wants a merged decoder, which `export_onnx.py` does not produce:
+
+```bash
+optimum-cli export onnx --model model_7200 --task text2text-generation-with-past onnx_merged
+```
+
+Then quantise `encoder_model.onnx` and `decoder_model_merged.onnx` (same `ORTQuantizer` call as in `export_onnx.py`) into `extension/public/models/gloss/onnx/`, and copy `config.json`, `generation_config.json` and the tokenizer files next to it. About 77 MB in total.
+
+Quantisation costs some accuracy: the int8 browser model wrote TASTE for "apples" where the int8 model checked in Python wrote APPLE1. Not yet measured on the held-out set.

@@ -14,7 +14,7 @@ Both run inside the extension on the viewer's machine. Nothing here is a substit
 | Milestone | State |
 |---|---|
 | 1. Dataset pipeline (`pipeline/`) | Code done. Sign dictionary build in progress; How2Sign build not yet run. |
-| 2. Extension, avatar, dictionary baseline | Overlay, captions, stitching and a 3D stick-figure renderer built. Not yet run as an installed extension. English → gloss is a word-lookup placeholder; no trained model, no VRM avatar yet. |
+| 2. Extension, avatar, dictionary baseline | Overlay, captions, stitching, 3D stick figure, and the trained English → gloss model running in the background worker (verified in a browser demo page, about 0.2 s per sentence; not yet run as an installed extension). Word lookup is the fallback until a caption is glossed. No VRM avatar, no fingerspelling. |
 | 3. End-to-end model | Not started |
 | 4. Evaluation | Not started |
 
@@ -42,6 +42,8 @@ Pose format: 102 points per frame (8 body, 2×21 hand, 52 face), 15 fps, centred
 cd pipeline && .venv/bin/aslytics export-lexicon     # writes extension/public/lexicon/
 cd ../extension && npm install && npm test && npm run build
 ```
+
+The gloss model must be in `extension/public/models/gloss/` before building (config and tokenizer files plus `onnx/encoder_model_quantized.onnx` and `onnx/decoder_model_merged_quantized.onnx`). See `training/text2gloss/README.md`. Without it the extension still works, using word lookup only.
 
 Load it in Chrome: open `chrome://extensions`, switch on Developer mode, choose "Load unpacked" and pick `extension/dist`. Open a captioned YouTube video; the overlay appears bottom right.
 

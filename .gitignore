@@ -34,3 +34,6 @@ training/**/claude_pairs*.jsonl
 training/**/*.zip
 training/**/model_*/
 training/**/onnx_model/
+extension/public/models/
+extension/public/ort/
+training/**/onnx_merged/

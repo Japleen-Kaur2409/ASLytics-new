@@ -2,29 +2,45 @@
 
 import { FPS, type Sequence } from "./landmarks";
 import type { Lexicon } from "./lexicon";
-import { WordLookup, type GlossResult } from "./gloss";
+import { GlossRepairer, WordLookup, type GlossResult } from "./gloss";
 import { stitch } from "./stitch";
 
 const MAX_SPEEDUP = 1.8;
 
 export interface Signed extends GlossResult {
   sequence: Sequence | null;
+  /** "model" when the trained gloss model produced this, "lookup" for the word-by-word fallback. */
+  source: "model" | "lookup";
 }
 
 export class Signer {
   private lookup: WordLookup;
+  private repairer: GlossRepairer;
   private cache = new Map<string, Signed>();
 
   constructor(private lexicon: Lexicon) {
     this.lookup = new WordLookup(lexicon.glosses);
+    this.repairer = new GlossRepairer(lexicon.glosses);
+  }
+
+  private build(gloss: GlossResult, source: Signed["source"]): Signed {
+    const clips = gloss.glosses.map((g) => this.lexicon.get(g));
+    return { ...gloss, source, sequence: clips.length ? stitch(clips) : null };
+  }
+
+  /** Record the trained model's gloss for a caption; it replaces the fallback from then on. */
+  setModelGloss(text: string, modelOutput: string): void {
+    this.cache.set(text, this.build(this.repairer.repair(modelOutput), "model"));
+  }
+
+  hasModelGloss(text: string): boolean {
+    return this.cache.get(text)?.source === "model";
   }
 
   sign(text: string): Signed {
     let result = this.cache.get(text);
     if (!result) {
-      const gloss = this.lookup.toGloss(text);
-      const clips = gloss.glosses.map((g) => this.lexicon.get(g));
-      result = { ...gloss, sequence: clips.length ? stitch(clips) : null };
+      result = this.build(this.lookup.toGloss(text), "lookup");
       this.cache.set(text, result);
     }
     return result;

@@ -5,15 +5,31 @@
   "description": "Experimental ASL signing overlay for captioned YouTube videos. Not a substitute for a human interpreter.",
   "content_scripts": [
     {
-      "matches": ["https://www.youtube.com/*"],
-      "js": ["content.js"],
+      "matches": [
+        "https://www.youtube.com/*"
+      ],
+      "js": [
+        "content.js"
+      ],
       "run_at": "document_idle"
     }
   ],
   "web_accessible_resources": [
     {
-      "resources": ["lexicon/lexicon.json", "lexicon/lexicon.bin"],
-      "matches": ["https://www.youtube.com/*"]
+      "resources": [
+        "lexicon/lexicon.json",
+        "lexicon/lexicon.bin"
+      ],
+      "matches": [
+        "https://www.youtube.com/*"
+      ]
     }
-  ]
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
+  }
 }

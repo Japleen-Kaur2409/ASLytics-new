@@ -1,0 +1,6 @@
+anthropic>=1.0
+torch>=2.4,<2.7  # the ONNX exporter in optimum 1.x breaks on newer PyTorch
+transformers>=4.44,<5
+sentencepiece
+accelerate
+optimum[onnxruntime]>=1.23,<2

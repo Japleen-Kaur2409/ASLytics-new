@@ -30,3 +30,5 @@ training/**/batch_state.json
 training/**/pairs.jsonl
 training/**/*.log
 training/**/kaggle_inputs/
+training/**/claude_pairs*.jsonl
+training/**/*.zip

@@ -28,3 +28,5 @@ training/**/onnx_model/
 training/**/smoke/
 training/**/batch_state.json
 training/**/pairs.jsonl
+training/**/*.log
+training/**/kaggle_inputs/

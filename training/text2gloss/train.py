@@ -60,6 +60,7 @@ def token_f1(predicted: str, reference: str) -> float:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--pairs", required=True)
+    parser.add_argument("--extra", help="more pairs, used for training only; the held-out set always comes from --pairs")
     parser.add_argument("--out", default="model")
     parser.add_argument("--base", default="t5-small")
     parser.add_argument("--epochs", type=float, default=10)
@@ -71,6 +72,11 @@ def main() -> None:
     random.Random(0).shuffle(pairs)
     n_val = max(1, len(pairs) // 20)
     val, train = pairs[:n_val], pairs[n_val:]
+    if args.extra:
+        held_out = {p["english"] for p in val}
+        extra = [json.loads(line) for line in Path(args.extra).read_text().splitlines() if line.strip()]
+        train += [p for p in extra if p.get("ok", True) and p["gloss"] and p["english"] not in held_out]
+        random.Random(1).shuffle(train)
     print(f"{len(train)} training pairs, {len(val)} held out")
 
     tokenizer = AutoTokenizer.from_pretrained(args.base)

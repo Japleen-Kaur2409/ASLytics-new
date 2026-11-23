@@ -6,7 +6,8 @@
 hold the whole 2,731-sign dictionary in every prompt at a useful speed, so each
 sentence gets a shortlist: the most common signs plus any sign whose name
 matches a word in the sentence. Every output is then checked against the FULL
-dictionary and dropped if it uses anything else.
+dictionary. Near-misses are repaired (WANT -> WANT1, I -> ME), the model gets one
+retry naming the words that were not signs, and anything still invalid is dropped.
 
 Safe to stop and re-run: finished sentences are skipped.
 
@@ -30,7 +31,9 @@ Every word of your answer must be either a sign from the allowed list, copied ex
 
 Use ASL structure, not English word order: time first, then topic, then comment. Leave out articles, forms of "to be" and filler words. Put question words at the end and NOT after the verb.
 
-Answer with the gloss only, on one line."""
+Many plain English words are NOT signs here. There is no I (use ME), no IT or THIS alone (use THIS/IT), no SHE or HER (use HE), no DO, no IS/ARE. Many signs only exist with a digit, such as WANT1, CAN1, WHAT1, THEY1: copy them from the list. If a word is not in the list, rephrase with signs that are, or fingerspell it.
+
+Answer with the gloss only, in capitals, on one line."""
 
 
 def base_name(gloss: str) -> str:
@@ -68,21 +71,51 @@ def build_messages(sentence: str, allowed: list[str], examples: list[dict]) -> l
     return [{"role": "system", "content": RULES}, {"role": "user", "content": user}]
 
 
-def clean(answer: str, vocabulary: set[str]) -> str | None:
-    """The gloss if every token is performable, else None."""
-    lines = [line.strip() for line in answer.strip().splitlines() if line.strip()]
-    if not lines:
-        return None
-    tokens = lines[0].removeprefix("Gloss:").replace(",", " ").replace(".", " ").split()
-    out = []
-    for token in tokens:
-        if token in vocabulary:
-            out.append(token)
-        elif token.lower().startswith("fs-") and token[3:].isalpha():
-            out.append("fs-" + token[3:].upper())
-        else:
-            return None
-    return " ".join(out) or None
+ALIASES = {"I": "ME", "IT": "THIS/IT", "THIS": "THIS/IT", "SHE": "HE", "HER": "HE", "HIM": "HE",
+           "THING": "THINGS", "HAND": "HANDS", "EYE": "EYES", "SAY": "TELL", "LOOK": "LOOKAT"}
+# Words ASL does not sign separately; safe to drop if the model writes them anyway.
+DROPPABLE = {"A", "AN", "THE", "IS", "ARE", "AM", "WAS", "WERE", "BE", "TO", "OF", "DO", "DOES", "DID", "SO", "JUST"}
+
+
+class Repairer:
+    """Turns a model answer into a performable gloss, fixing near-misses."""
+
+    def __init__(self, glosses: list[str]) -> None:
+        self.vocabulary = set(glosses)
+        self.variants: dict[str, str] = {}
+        for gloss in sorted(glosses, key=lambda g: (len(g), g)):  # APPLE before APPLE2, WANT1 before WANT2
+            self.variants.setdefault(base_name(gloss), gloss)
+
+    def repair(self, answer: str) -> tuple[str | None, list[str]]:
+        """(gloss, []) when every token could be made valid, else (None, the tokens that could not)."""
+        lines = [line.strip() for line in answer.strip().splitlines() if line.strip()]
+        if not lines:
+            return None, []
+        first = re.sub(r"^(gloss|asl gloss)\s*:\s*", "", lines[0], flags=re.IGNORECASE)
+        out, invalid = [], []
+        for raw in first.replace(",", " ").replace(";", " ").split():
+            token = raw.strip(".!?\"'()")
+            if not token:
+                continue
+            if token.lower().startswith("fs-"):
+                word = re.sub(r"[^A-Za-z]", "", token[3:])
+                if word:
+                    out.append("fs-" + word.upper())
+                continue
+            token = token.upper()
+            if token in self.vocabulary:
+                out.append(token)
+            elif token in ALIASES and ALIASES[token] in self.vocabulary:
+                out.append(ALIASES[token])
+            elif base_name(token) in self.variants:  # WANT -> WANT1
+                out.append(self.variants[base_name(token)])
+            elif token in DROPPABLE:
+                continue
+            else:
+                invalid.append(token)
+        if invalid or not out:
+            return None, invalid
+        return " ".join(out), []
 
 
 def load_model(name: str) -> Callable[[list[list[dict]]], list[str]]:
@@ -114,7 +147,7 @@ def load_model(name: str) -> Callable[[list[list[dict]]], list[str]]:
 def run(inputs: Path, out: Path, answer: Callable[[list[list[dict]]], list[str]],
         batch_size: int = 8, limit: int | None = None) -> dict:
     glosses = json.loads((inputs / "glosses.json").read_text())
-    vocabulary = set(glosses)
+    repairer = Repairer(glosses)
     shortlister = Shortlister(glosses, json.loads((inputs / "core_glosses.json").read_text()))
     examples = [json.loads(line) for line in (inputs / "fewshot.jsonl").read_text().splitlines() if line.strip()]
     sentences = [s for s in (inputs / "sentences.txt").read_text().splitlines() if s.strip()]
@@ -125,21 +158,40 @@ def run(inputs: Path, out: Path, answer: Callable[[list[list[dict]]], list[str]]
     if out.exists():
         done = {json.loads(line)["english"] for line in out.read_text().splitlines() if line.strip()}
     todo = [s for s in sentences if s not in done]
-    kept = dropped = 0
+    kept = dropped = retried = 0
     with out.open("a") as f:
         for start in range(0, len(todo), batch_size):
             batch = todo[start:start + batch_size]
             chats = [build_messages(s, shortlister.shortlist(s), examples) for s in batch]
-            for sentence, text in zip(batch, answer(chats)):
-                gloss = clean(text, vocabulary)
+            raws = answer(chats)
+            results = [repairer.repair(raw) for raw in raws]
+
+            # One more try for the failures, telling the model exactly which words were not signs.
+            again = [i for i, (gloss, invalid) in enumerate(results) if gloss is None and invalid]
+            if again:
+                retried += len(again)
+                follow_ups = [chats[i] + [
+                    {"role": "assistant", "content": raws[i].strip()},
+                    {"role": "user", "content": "These are not in the allowed list: " + " ".join(results[i][1])
+                     + ". Rewrite the gloss using only allowed signs, or fs-WORD for those words. Gloss only."},
+                ] for i in again]
+                for i, raw in zip(again, answer(follow_ups)):
+                    gloss, invalid = repairer.repair(raw)
+                    if gloss is not None:
+                        results[i], raws[i] = (gloss, []), raw
+                    else:
+                        results[i] = (None, invalid or results[i][1])
+
+            for sentence, raw, (gloss, invalid) in zip(batch, raws, results):
                 # Rejected sentences are recorded too, so a re-run does not retry them.
-                f.write(json.dumps({"english": sentence, "gloss": gloss or "", "ok": gloss is not None}) + "\n")
+                f.write(json.dumps({"english": sentence, "gloss": gloss or "", "ok": gloss is not None,
+                                    "raw": raw.strip()[:300], "invalid": invalid}) + "\n")
                 kept += gloss is not None
                 dropped += gloss is None
             f.flush()
             if (start // batch_size) % 25 == 0:
                 print(f"{start + len(batch)}/{len(todo)} done, {kept} kept, {dropped} dropped", flush=True)
-    return {"kept": kept, "dropped": dropped, "skipped": len(sentences) - len(todo)}
+    return {"kept": kept, "dropped": dropped, "retried": retried, "skipped": len(sentences) - len(todo)}
 
 
 def main() -> None:

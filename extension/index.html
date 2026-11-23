@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ASLytics renderer demo</title>
+    <style>
+      body { font: 14px/1.5 system-ui, sans-serif; margin: 24px; background: #f4f4f4; color: #222; }
+      #stage { width: 360px; background: #fafafa; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,.2); overflow: hidden; }
+      input { width: 340px; padding: 6px 8px; font: inherit; }
+      #info { color: #555; margin: 8px 0; max-width: 700px; }
+    </style>
+  </head>
+  <body>
+    <h1>ASLytics renderer demo</h1>
+    <p>Development page for the stitching and renderer, without YouTube. Type English text and press Enter.</p>
+    <input id="text" value="hello my name apple" aria-label="English text to sign" />
+    <div id="info"></div>
+    <div id="stage"></div>
+    <script type="module" src="/src/demo.ts"></script>
+  </body>
+</html>

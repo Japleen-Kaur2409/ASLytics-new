@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "ASLytics (experimental)",
+  "version": "0.1.0",
+  "description": "Experimental ASL signing overlay for captioned YouTube videos. Not a substitute for a human interpreter.",
+  "content_scripts": [
+    {
+      "matches": ["https://www.youtube.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["lexicon/lexicon.json", "lexicon/lexicon.bin"],
+      "matches": ["https://www.youtube.com/*"]
+    }
+  ]
+}

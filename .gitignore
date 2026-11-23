@@ -1,0 +1,30 @@
+# Data never goes in git: videos and poses are research-licensed and large
+data/
+*.mp4
+*.npz
+*.pose
+*.onnx
+*.zip
+
+# Python
+.venv/
+__pycache__/
+*.egg-info/
+.pytest_cache/
+
+# Node
+node_modules/
+dist/
+
+.DS_Store
+
+# Dictionary pack derived from ASL Citizen: local only
+extension/public/lexicon/
+
+# Training artefacts
+training/**/.venv/
+training/**/model/
+training/**/onnx_model/
+training/**/smoke/
+training/**/batch_state.json
+training/**/pairs.jsonl

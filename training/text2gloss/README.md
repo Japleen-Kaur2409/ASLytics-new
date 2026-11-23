@@ -24,4 +24,19 @@ Notes:
 - The quantised export is about 150 MB across three files (95 MB if the browser loads only the encoder and one decoder).
 - Not done yet: running the exported model inside the extension.
 
-Verified so far: a smoke test of train and export (600 template sentences, 4 epochs on CPU), and the Kaggle generator's shortlisting, validation and resume logic with a stand-in model. The notebook itself has not been run on Kaggle, and no model has been trained on the real pairs yet (training does not fit on an 8 GB Mac alongside other work).
+## Results so far
+
+Scored on the same 120 held-out Claude-written sentences (token F1 against the reference gloss):
+
+| Training pairs | Token F1 | Exact match |
+|---|---|---|
+| 2,400 | 0.61 | 0.8% |
+| 7,200 | 0.70 | 13.3% |
+
+These measure agreement with Claude-written glosses, which no ASL signer has reviewed.
+
+The open-model (Qwen2.5-7B) trial kept 21 of 40 sentences after repair and retry, and what it kept was mostly English word order, so the full run was not done.
+
+Note: models trained on Kaggle are saved by a newer `transformers` whose tokenizer config the pinned local version cannot read. Before exporting, replace the tokenizer files with `AutoTokenizer.from_pretrained("t5-small").save_pretrained(<model dir>)`; fine-tuning does not change the tokenizer.
+
+Not done yet: running the exported model inside the extension.

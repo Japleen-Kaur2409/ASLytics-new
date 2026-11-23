@@ -32,3 +32,5 @@ training/**/*.log
 training/**/kaggle_inputs/
 training/**/claude_pairs*.jsonl
 training/**/*.zip
+training/**/model_*/
+training/**/onnx_model/
